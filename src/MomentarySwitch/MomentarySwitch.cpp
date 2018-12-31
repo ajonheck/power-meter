@@ -1,6 +1,6 @@
 #define WAIT_COUNT 99
 #define READ_COUNT 4
-#define HELD_COUNT 10
+#define HELD_COUNT 100
 
 #include "MomentarySwitch.h"
 #include "Arduino.h"
@@ -32,11 +32,11 @@ bool MomentarySwitch::isPressed()
 		_pressed = readings[0];
 	}
 	
-	if(_pressed)
+	if(_pressed && _held <= HELD_COUNT)
 	{
 		_held ++;
 	}
-	else
+	else if(!_pressed)
 	{
 		_held = 0;
 	}
