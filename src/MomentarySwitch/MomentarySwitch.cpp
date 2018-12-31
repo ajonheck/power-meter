@@ -5,8 +5,11 @@
 #include "MomentarySwitch.h"
 #include "Arduino.h"
 
-MomentarySwitch::MomentarySwitch(uint8_t pin) : _pin(pin), _pressed(false), _held(0)
+MomentarySwitch::MomentarySwitch(uint8_t pin)
 {
+	_pin = pin;
+	_pressed = false;
+	_held = 0;
 	pinMode(_pin, INPUT);
 }
 
