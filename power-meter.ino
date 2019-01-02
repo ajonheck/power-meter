@@ -1,81 +1,62 @@
+// Project specific includes
 #include "src/MomentarySwitch/MomentarySwitch.h"
 #include "src/Meter/Meter.h"
+#include "src/PowerDisplay/PowerDisplay.h"
 
-#define GREEN_BUTTON 7
-#define RED_BUTTON 6
-#define VOLT_METER A1
-#define AMP_METER A2
-#define GREEN_LED 3
-#define RED_LED 2
+/* Constant definitions */
+#define GREEN_BUTTON 2
+#define RED_BUTTON 3
+#define VOLT_METER A6
+#define AMP_METER A7
 #define BAUDRATE 9600
+#define INTERRUPT_TIME 0.00992
+
+/* Functional definitions */
+#define CHK_BIT(c, n) ((c) & (1<<(n)))
+#define CLR_BIT(c, n) ((c) &= ~((1) << (n)))
+#define SET_BIT(c, n) ((c) |= (1<<(n)))
+
+/* Enumerated Types */
+enum IsrMask: uint8_t {
+  ISR_10_ms    = 0,
+  ISR_20_ms    = 1,
+  ISR_50_ms    = 2,
+  ISR_100_ms   = 3,
+  ISR_200_ms   = 4,
+  ISR_500_ms   = 5,
+  ISR_1000_ms  = 6,
+  ISR_2000_ms  = 7
+};
 
 /* Declare global variables */
 MomentarySwitch gbttn(GREEN_BUTTON);
-Meter v_met(VOLT_METER, 0.0048828125, 0);
-Meter i_met(AMP_METER, 0.003522068478, 0.01629657612);
-bool previous_state = false;
-bool current_state = false;
-uint8_t press_count = 0;
+MomentarySwitch rbttn(RED_BUTTON);
+
+Meter vMet(VOLT_METER, 0.0048828125, 0);
+Meter iMet(AMP_METER, 0.003522068478, 0.01629657612);
+
+volatile char isr_flag = 0;
 uint8_t interrupt_count = 0;
+bool isRunning;
+
+double p, minP, maxP, averageP, energy;
+int readingCount = 0;
+
+PowerDisplay display = PowerDisplay();
 
 /**
- * Setup variables before starting polling loop
+ * Setup
  */
 void setup() {
-  Serial.begin(BAUDRATE);
-  pinMode(GREEN_LED, OUTPUT);
-  setup_isr_timer();
-}
-
-SIGNAL(TIMER2_COMPA_vect)
-{
-  isr_10ms();
-}
-
-/**
- * Interrupt routine called every ~9.984 ms (10 ms)
- */
-void isr_10ms()
-{
-  current_state = gbttn.isPressed();
-  if(current_state == true && current_state != previous_state)
-  {
-    press_count ++;
-    Serial.print("Green button pressed: ");
-    Serial.print(press_count);
-    Serial.print("\n");
-    v_met.reset();
-    i_met.reset();
-  }
-
-  gbttn.isHeld() ? digitalWrite(GREEN_LED, HIGH) : digitalWrite(GREEN_LED, LOW);
+  isRunning = false;
+  p = 0;
+  minP = 100000;
+  maxP = -1;
+  averageP = 0;
   
-  previous_state = current_state;
-  v_met.read();
-  i_met.read();
-
-  interrupt_count ++;
-  if(interrupt_count % 100 == 0)
-  {
-    isr_1000ms();
-    interrupt_count = 0;
-  }
-}
-
-void isr_1000ms()
-{
-  Serial.print("Voltmeter readings:");
-  Serial.print("\n\tinstant: ");
-  Serial.print(v_met.read(),5);
-  Serial.print("\n\tave: ");
-  Serial.print(v_met.getAverage(),5);
-  Serial.print("\n");
-  Serial.print("Ampmeter readings:");
-  Serial.print("\n\tinstant: ");
-  Serial.print(i_met.read(),5);
-  Serial.print("\n\tave: ");
-  Serial.print(i_met.getAverage(),5);
-  Serial.print("\n");
+  Serial.begin(BAUDRATE);
+  display.boot();
+  setup_isr_timer();
 }
 
 /**
@@ -90,6 +71,114 @@ void setup_isr_timer()
   sei();
 }
 
+void isr_10_ms()
+{
+  //Handle buttons
+  if(isRunning)
+  {
+    if(rbttn.isPressed())
+    {
+      isRunning = false;
+    }
+  }
+  else
+  {
+    if(gbttn.isPressed())
+    {
+      isRunning = true;
+    }
+  }
+
+  if(gbttn.isHeld() && rbttn.isHeld())
+  {
+    isRunning = false;
+    p = 0;
+    minP = 100000;
+    maxP = -1;
+    averageP = 0;
+    vMet.reset();
+    iMet.reset();
+    display.setVoltageValues(0, 0, 0, 0);
+    display.setCurrentValues(0, 0, 0, 0);
+    display.setPowerValues(0, 0, 0,0);
+    display.updateDisplay();
+  } else {
+    if(gbttn.isHeld())
+    {
+      display.changeDisplayUnits(1);
+    }
+    if(rbttn.isHeld())
+    {
+      display.changeDisplayUnits(2);      
+    }
+  }
+
+  if(isRunning)
+  {
+    p = vMet.read() * iMet.read();
+    readingCount ++;
+    minP = p < minP ? p : minP;
+    maxP = p > maxP ? p : maxP;
+    averageP = averageP * ((double)readingCount - 1)/((double)readingCount)
+      + (double)p * (1/(double)readingCount);
+    energy += p * INTERRUPT_TIME;
+    CLR_BIT(isr_flag, ISR_10_ms);
+  }
+}
+
+void isr_2000_ms()
+{
+  // update display values
+  display.setVoltageValues(vMet.getLastReading(), vMet.getMin(), vMet.getMax(), vMet.getAverage());
+  display.setCurrentValues(iMet.getLastReading(), iMet.getMin(), iMet.getMax(), iMet.getAverage());
+  display.setPowerValues(p, minP, maxP, averageP);
+  display.updateDisplay();
+  CLR_BIT(isr_flag, ISR_2000_ms);
+}
 
 void loop() {
+  if(CHK_BIT(isr_flag, ISR_10_ms))
+  {
+    isr_10_ms();
+  }
+  if(CHK_BIT(isr_flag, ISR_2000_ms))
+  {
+    isr_2000_ms();
+  }
+}
+
+
+SIGNAL(TIMER2_COMPA_vect)
+{
+  SET_BIT(isr_flag, ISR_10_ms);
+  interrupt_count ++;
+  if(interrupt_count % 2 == 0)
+  {
+    SET_BIT(isr_flag, ISR_20_ms);
+  }
+  if(interrupt_count % 5 == 0)
+  {
+    SET_BIT(isr_flag, ISR_50_ms);
+  }
+  if(interrupt_count % 10 == 0)
+  {
+    SET_BIT(isr_flag, ISR_100_ms);
+  }
+  if(interrupt_count % 20 == 0)
+  {
+    SET_BIT(isr_flag, ISR_200_ms);
+  }
+  if(interrupt_count % 50 == 0)
+  {
+    SET_BIT(isr_flag, ISR_500_ms);
+  }
+  if(interrupt_count % 100 == 0)
+  {
+    SET_BIT(isr_flag, ISR_1000_ms);
+  }
+  if(interrupt_count % 200 == 0)
+  {
+    SET_BIT(isr_flag, ISR_2000_ms);
+    interrupt_count = 0;
+  }
 }

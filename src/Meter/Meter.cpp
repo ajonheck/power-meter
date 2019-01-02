@@ -10,22 +10,24 @@ Meter::Meter(uint8_t pin, double slope, double intercept)
 	reset();
 }
 
+double Meter::getLastReading()
+{
+	return _interpolate((double)_instant);
+}
+
 double Meter::read()
 {
 	_instant = analogRead(_pin);
 	_count ++;
-	if(_instant < _min)
-	{
-		_min = _instant;
-	}
-	if(_instant > _max)
-	{
-		_max = _instant;
-	}
+	_min = _instant < _min ? _instant : _min;
+	_max = _instant > _max ? _instant : _max;
 	_ave = _ave * ((double)_count - 1)/((double)_count)
 		+ (double)_instant * (1/(double)_count);
 		
-	return _interpolate((double)_instant);
+	_movingAveragePtr > MOVING_AVERAGE_COUNT - 1 ? _movingAveragePtr = 0 : _movingAveragePtr ++;
+	_movingAverage[_movingAveragePtr] = _instant;
+	
+	return getLastReading();
 }
 
 double Meter::_interpolate(double data_point)
@@ -48,6 +50,17 @@ double Meter::getAverage()
 	return _interpolate(_ave);
 }
 
+double Meter::getMovingAverage()
+{
+	int sum;
+	for(int i = 0; i <= MOVING_AVERAGE_COUNT-1; i ++)
+	{
+		sum += _movingAverage[i];
+	}
+	double ave = (double)(sum) / (double)MOVING_AVERAGE_COUNT;
+	return _interpolate(ave);
+}
+
 double Meter::reset()
 {
 	_max = -32768;
@@ -55,4 +68,10 @@ double Meter::reset()
     _ave = 0;
     _instant = 0;
 	_count = 0;
+	_movingAveragePtr = 0;
+	
+	for(int i = 0; i <= MOVING_AVERAGE_COUNT-1; i ++)
+	{
+		_movingAverage[i] = 0;
+	}
 }
