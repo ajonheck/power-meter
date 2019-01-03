@@ -7,10 +7,16 @@
 #include <Adafruit_SSD1306.h>
 #include "Arduino.h"
 
-enum DisplayedUnits: uint8_t {
+enum DisplayedMeasurements: uint8_t {
 	INST_AVERAGE,
 	INST_MIN,
 	INST_MAX
+};
+
+enum Line: uint8_t {
+	VOLTAGE_LINE,
+	CURRENT_LINE,
+	POWER_LINE
 };
 
 enum ValueKeys: uint8_t {
@@ -37,13 +43,11 @@ class PowerDisplay
 		void setCurrentValues(double instant, double min, double max, double average);
 		void setPowerValues(double instant, double min, double max, double average);
 		void setEnergyUsage(double energy);
-		void changeDisplayUnits(uint8_t line_number);
+		void changeDisplayUnits(Line line_number);
 		void updateDisplay();
 		void boot();
 	private:
-		uint8_t _voltageUnits;
-		uint8_t _currentUnits;
-		uint8_t _powerUnits;
+		DisplayedMeasurements _displayedMeasurements[3];
 		Adafruit_SSD1306 _display;
 		double values[13];
 		void _displayLine(String label1, double value1, String label2, double value2, String unit);

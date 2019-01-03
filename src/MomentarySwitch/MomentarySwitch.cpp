@@ -1,6 +1,7 @@
 #define WAIT_COUNT 99
 #define READ_COUNT 4
 #define HELD_COUNT 100
+#define TAP_COUNT 2
 
 #include "MomentarySwitch.h"
 #include "Arduino.h"
@@ -8,12 +9,18 @@
 MomentarySwitch::MomentarySwitch(uint8_t pin)
 {
 	_pin = pin;
-	_pressed = false;
-	_held = 0;
 	pinMode(_pin, INPUT);
+	resetStatus();
 }
 
-bool MomentarySwitch::isPressed()
+void MomentarySwitch::resetStatus()
+{
+	_pressed = false;
+	_held = 0;
+	_tapped = false;
+}
+
+void MomentarySwitch::poll()
 {
 	bool inconclusive_reading = false;
 	char readings[READ_COUNT];
@@ -39,18 +46,34 @@ bool MomentarySwitch::isPressed()
 	{
 		_held ++;
 	}
-	else if(!_pressed)
+	else if(!_pressed && _held < HELD_COUNT && _held >= TAP_COUNT)
+	{
+		_held = 0;
+		_tapped = true;
+	} else if(!_pressed && _held >= HELD_COUNT)
 	{
 		_held = 0;
 	}
 	
-	return _pressed;
 }
 
 bool MomentarySwitch::isHeld()
 {
 	if(_held >= HELD_COUNT)
 	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+bool MomentarySwitch::wasTapped()
+{
+	if(_tapped)
+	{
+		_tapped = false;
 		return true;
 	}
 	else

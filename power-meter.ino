@@ -73,20 +73,57 @@ void setup_isr_timer()
 
 void isr_10_ms()
 {
+  bool actionTaken = false;
+  
   //Handle buttons
+  gbttn.poll();
+  rbttn.poll();
+  if(isRunning && rbttn.wasTapped())
+  {
+    isRunning = false;
+    Serial.println("Red tapped; stopping run");
+    actionTaken = true;
+  }
+  
+  else if(!isRunning && gbttn.wasTapped())
+  {
+    isRunning = true;
+    Serial.println("Green tapped; starting run");
+    actionTaken = true;
+  }
+
+  if(actionTaken)
+  {
+    gbttn.resetStatus();
+    rbttn.resetStatus();
+  }
+
+  // Handle readings
   if(isRunning)
   {
-    if(rbttn.isPressed())
-    {
-      isRunning = false;
-    }
+    p = vMet.read() * iMet.read();
+    readingCount ++;
+    minP = p < minP ? p : minP;
+    maxP = p > maxP ? p : maxP;
+    averageP = averageP * ((double)readingCount - 1)/((double)readingCount)
+      + (double)p * (1/(double)readingCount);
+    energy += p * INTERRUPT_TIME;
   }
-  else
-  {
-    if(gbttn.isPressed())
-    {
-      isRunning = true;
-    }
+  
+  // Clear the interrupt bit
+  CLR_BIT(isr_flag, ISR_10_ms);
+}
+
+void isr_2000_ms()
+{
+  if(isRunning)
+  { 
+    // update display values
+    display.setVoltageValues(vMet.getLastReading(), vMet.getMin(), vMet.getMax(), vMet.getAverage());
+    display.setCurrentValues(iMet.getLastReading(), iMet.getMin(), iMet.getMax(), iMet.getAverage());
+    display.setPowerValues(p, minP, maxP, averageP);
+    display.setEnergyUsage(energy);
+    display.updateDisplay();
   }
 
   if(gbttn.isHeld() && rbttn.isHeld())
@@ -100,39 +137,18 @@ void isr_10_ms()
     iMet.reset();
     display.setVoltageValues(0, 0, 0, 0);
     display.setCurrentValues(0, 0, 0, 0);
-    display.setPowerValues(0, 0, 0,0);
+    display.setPowerValues(0, 0, 0, 0);
+    display.setEnergyUsage(0);
     display.updateDisplay();
-  } else {
-    if(gbttn.isHeld())
-    {
-      display.changeDisplayUnits(1);
-    }
-    if(rbttn.isHeld())
-    {
-      display.changeDisplayUnits(2);      
-    }
   }
-
-  if(isRunning)
-  {
-    p = vMet.read() * iMet.read();
-    readingCount ++;
-    minP = p < minP ? p : minP;
-    maxP = p > maxP ? p : maxP;
-    averageP = averageP * ((double)readingCount - 1)/((double)readingCount)
-      + (double)p * (1/(double)readingCount);
-    energy += p * INTERRUPT_TIME;
-    CLR_BIT(isr_flag, ISR_10_ms);
+  else if(gbttn.isHeld())
+  {    
+    display.changeDisplayUnits(VOLTAGE_LINE);
+    display.changeDisplayUnits(CURRENT_LINE);
+    display.changeDisplayUnits(POWER_LINE);
+    display.updateDisplay();     
   }
-}
-
-void isr_2000_ms()
-{
-  // update display values
-  display.setVoltageValues(vMet.getLastReading(), vMet.getMin(), vMet.getMax(), vMet.getAverage());
-  display.setCurrentValues(iMet.getLastReading(), iMet.getMin(), iMet.getMax(), iMet.getAverage());
-  display.setPowerValues(p, minP, maxP, averageP);
-  display.updateDisplay();
+  
   CLR_BIT(isr_flag, ISR_2000_ms);
 }
 
@@ -152,30 +168,30 @@ SIGNAL(TIMER2_COMPA_vect)
 {
   SET_BIT(isr_flag, ISR_10_ms);
   interrupt_count ++;
-  if(interrupt_count % 2 == 0)
-  {
-    SET_BIT(isr_flag, ISR_20_ms);
-  }
-  if(interrupt_count % 5 == 0)
-  {
-    SET_BIT(isr_flag, ISR_50_ms);
-  }
-  if(interrupt_count % 10 == 0)
-  {
-    SET_BIT(isr_flag, ISR_100_ms);
-  }
-  if(interrupt_count % 20 == 0)
-  {
-    SET_BIT(isr_flag, ISR_200_ms);
-  }
-  if(interrupt_count % 50 == 0)
-  {
-    SET_BIT(isr_flag, ISR_500_ms);
-  }
-  if(interrupt_count % 100 == 0)
-  {
-    SET_BIT(isr_flag, ISR_1000_ms);
-  }
+//  if(interrupt_count % 2 == 0)
+//  {
+//    SET_BIT(isr_flag, ISR_20_ms);
+//  }
+//  if(interrupt_count % 5 == 0)
+//  {
+//    SET_BIT(isr_flag, ISR_50_ms);
+//  }
+//  if(interrupt_count % 10 == 0)
+//  {
+//    SET_BIT(isr_flag, ISR_100_ms);
+//  }
+//  if(interrupt_count % 20 == 0)
+//  {
+//    SET_BIT(isr_flag, ISR_200_ms);
+//  }
+//  if(interrupt_count % 50 == 0)
+//  {
+//    SET_BIT(isr_flag, ISR_500_ms);
+//  }
+//  if(interrupt_count % 100 == 0)
+//  {
+//    SET_BIT(isr_flag, ISR_1000_ms);
+//  }
   if(interrupt_count % 200 == 0)
   {
     SET_BIT(isr_flag, ISR_2000_ms);

@@ -2,9 +2,9 @@
 PowerDisplay::PowerDisplay()
 {
 	Adafruit_SSD1306 _display = Adafruit_SSD1306(128, 32, &Wire);
-	_voltageUnits = INST_AVERAGE;
-	_currentUnits = INST_AVERAGE;
-	_powerUnits = INST_AVERAGE;
+	_displayedMeasurements[VOLTAGE_LINE] = INST_AVERAGE;
+	_displayedMeasurements[CURRENT_LINE] = INST_AVERAGE;
+	_displayedMeasurements[POWER_LINE] = INST_AVERAGE;
 
 }
 
@@ -28,18 +28,19 @@ void PowerDisplay::boot()
   _display.display(); // actually display all of the above
 }
 
-void PowerDisplay::changeDisplayUnits(uint8_t line_number)
+void PowerDisplay::changeDisplayUnits(Line line_number)
 {
-	if(line_number == 1 && (_voltageUnits ++) > INST_MAX)
+	if(_displayedMeasurements[line_number] == INST_AVERAGE)
 	{
-		_voltageUnits = INST_AVERAGE;
+		_displayedMeasurements[line_number] = INST_MIN;
 	}
-	else if(line_number == 2 && (_currentUnits ++) > INST_MAX)
+	else if(_displayedMeasurements[line_number] == INST_MIN)
 	{
-		_currentUnits = INST_AVERAGE;
-	} else if (line_number == 3 && (_powerUnits ++) > INST_MAX)
+		_displayedMeasurements[line_number] = INST_MAX;
+	}
+	else if (_displayedMeasurements[line_number] == INST_MAX)
 	{
-		_powerUnits = INST_AVERAGE;
+		_displayedMeasurements[line_number] = INST_AVERAGE;
 	}
 }
 
@@ -51,46 +52,52 @@ void PowerDisplay::updateDisplay()
     _display.setCursor(0,0);
 	
 	// Set voltage display
-	if(_voltageUnits == INST_AVERAGE)
+	if(_displayedMeasurements[VOLTAGE_LINE] == INST_AVERAGE)
 	{
-		_displayLine("V", values[INST_VOLTAGE], "Ave", values[AVE_VOLTAGE], "V");
+		_displayLine("V", values[INST_VOLTAGE], "A", values[AVE_VOLTAGE], "V");
 	}
-	else if (_voltageUnits == INST_MIN)
+	else if (_displayedMeasurements[VOLTAGE_LINE] == INST_MIN)
 	{
-		_displayLine("V", values[INST_VOLTAGE], "Min", values[MIN_VOLTAGE], "V");
+		_displayLine("V", values[INST_VOLTAGE], "m", values[MIN_VOLTAGE], "V");
 	}
 	else
 	{
-		_displayLine("V", values[INST_VOLTAGE], "Max", values[MAX_VOLTAGE], "V");
+		_displayLine("V", values[INST_VOLTAGE], "M", values[MAX_VOLTAGE], "V");
 	}
 	
 	// Set current Display
-	if(_currentUnits == INST_AVERAGE)
+	if(_displayedMeasurements[CURRENT_LINE] == INST_AVERAGE)
 	{
-		_displayLine("I", values[INST_CURRENT], "Ave", values[AVE_CURRENT], "A");
+		_displayLine("I", values[INST_CURRENT], "A", values[AVE_CURRENT], "A");
 	}
-	else if (_currentUnits == INST_MIN)
+	else if (_displayedMeasurements[CURRENT_LINE] == INST_MIN)
 	{
-		_displayLine("I", values[INST_CURRENT], "Min", values[MIN_CURRENT], "A");
+		_displayLine("I", values[INST_CURRENT], "m", values[MIN_CURRENT], "A");
 	}
 	else
 	{
-		_displayLine("I", values[INST_CURRENT], "Max", values[MAX_CURRENT], "A");
+		_displayLine("I", values[INST_CURRENT], "M", values[MAX_CURRENT], "A");
 	}
 	
 	// Set power Display
-	if(_powerUnits == INST_AVERAGE)
+	if(_displayedMeasurements[POWER_LINE] == INST_AVERAGE)
 	{
-		_displayLine("P", values[INST_POWER], "Ave", values[AVE_POWER], "W");
+		_displayLine("P", values[INST_POWER], "A", values[AVE_POWER], "W");
 	}
-	else if (_powerUnits == INST_MIN)
+	else if (_displayedMeasurements[POWER_LINE] == INST_MIN)
 	{
-		_displayLine("P", values[INST_POWER], "Min", values[MIN_POWER], "W");
+		_displayLine("P", values[INST_POWER], "m", values[MIN_POWER], "W");
 	}
 	else
 	{
-		_displayLine("P", values[INST_POWER], "Max", values[MAX_POWER], "W");
+		_displayLine("P", values[INST_POWER], "M", values[MAX_POWER], "W");
 	}
+	
+	char energy_str[32];
+	dtostrf(values[ENERGY]/60/60, 7, 4, energy_str);
+	
+	_display.println( String("") + "E: " + energy_str + "kWh");
+
 	
     _display.setCursor(0,0);
     _display.display(); // actually display all of the above
@@ -117,8 +124,15 @@ void PowerDisplay::setPowerValues(double instant, double min, double max, double
 	values[MAX_POWER] = max;
 	values[AVE_POWER] = average;
 }
-
+void PowerDisplay::setEnergyUsage(double energy)
+{
+	values[ENERGY] = energy;
+}
 void PowerDisplay::_displayLine(String label1, double value1, String label2, double value2, String unit)
 {
-	_display.println( String("") + label1 + ": " + value1 + unit + ", " + label2 + ": " + value2 + unit);
+	char str1[8];
+	char str2[8];
+	dtostrf(value1, 4, 3, str1);
+	dtostrf(value2, 4, 3, str2);
+	_display.println( String("") + label1 + ": " + str1 + unit + ", " + label2 + ": " + str2 + unit);
 }
